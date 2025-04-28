@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager - Edit Task</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <h1>Task Manager</h1>
+            <h2>Edit Task</h2>
+            <div id="error-message" class="error-message"></div>
+            <form id="edit-task-form" action="server.php" method="post">
+                <input type="hidden" name="action" value="update_task">
+                <input type="hidden" id="task_id" name="task_id">
+                <div class="form-group">
+                    <label for="task_name">Task Name</label>
+                    <input type="text" id="task_name" name="task_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="task_date">Due Date</label>
+                    <input type="date" id="task_date" name="task_date" required>
+                </div>
+                <div class="form-group">
+                    <label for="task_status">Status</label>
+                    <select id="task_status" name="task_status" required>
+                        <option value="Active">Active</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <a href="dashboard.html" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Update Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Check if user is logged in
+        fetch('server.php', {
+            method: 'POST',
+            body: new URLSearchParams({
+                'action': 'check_session'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                window.location.href = 'index.html';
+            } else {
+                loadTaskDetails();
+            }
+        })
+        .catch(error => {
+            window.location.href = 'index.html';
+        });
+
+        // Get task ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const taskId = urlParams.get('id');
+        
+        if (!taskId) {
+            window.location.href = 'dashboard.html';
+        }
+        
+        document.getElementById('task_id').value = taskId;
+
+        // Load task details
+        function loadTaskDetails() {
+            fetch('server.php', {
+                method: 'POST',
+                body: new URLSearchParams({
+                    'action': 'get_task',
+                    'task_id': taskId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('task_name').value = data.task.Name;
+                    document.getElementById('task_date').value = data.task.Date;
+                    document.getElementById('task_status').value = data.task.Status;
+                } else {
+                    window.location.href = 'dashboard.html';
+                }
+            })
+            .catch(error => {
+                window.location.href = 'dashboard.html';
+            });
+        }
+
+        // Submit form
+        document.getElementById('edit-task-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            fetch('server.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = 'dashboard.html';
+                } else {
+                    document.getElementById('error-message').textContent = data.message;
+                }
+            })
+            .catch(error => {
+                document.getElementById('error-message').textContent = 'An error occurred. Please try again.';
+            });
+        });
+    </script>
+</body>
+</html>
