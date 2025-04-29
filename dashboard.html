@@ -97,11 +97,11 @@
                 const taskElement = document.createElement('div');
                 taskElement.className = 'task-item';
                 
-                const taskDate = new Date(task.Date).toLocaleDateString();
+                const taskDate = new Date(task.date).toLocaleDateString();
                 
                 taskElement.innerHTML = `
                     <div class="task-details">
-                        <h4>${task.Name}</h4>
+                        <h4>${task.name}</h4>
                         <p>Due: ${taskDate}</p>
                     </div>
                     <div class="task-actions">

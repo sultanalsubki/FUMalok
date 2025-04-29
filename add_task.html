@@ -20,7 +20,7 @@
                 </div>
                 <div class="form-group">
                     <label for="task_date">Due Date</label>
-                    <input type="date" id="task_date" name="task_date" required>
+                    <input type="datetime-local" id="task_date" name="task_date" required>
                 </div>
                 <div class="form-actions">
                     <a href="dashboard.html" class="btn btn-secondary">Cancel</a>
@@ -49,8 +49,10 @@
         });
 
         // Set minimum date to today
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('task_date').setAttribute('min', today);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        document.getElementById('task_date').min = today.toISOString().slice(0, 16);
+        document.getElementById('task_date').value = today.toISOString().slice(0, 16);
 
         // Submit form
         document.getElementById('add-task-form').addEventListener('submit', function(e) {

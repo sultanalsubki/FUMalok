@@ -4,21 +4,27 @@ session_start();
 
 // Database connection
 function connectDB() {
-    $host = 'localhost';
-    $username = 'root';
-    $password = '';
-    $database = 'task_manager';
-    
-    $conn = new mysqli($host, $username, $password, $database);
-    
-    if ($conn->connect_error) {
+    try {
+        error_log('Connecting to Neon Postgres...');
+        $conn = new PDO(
+            "pgsql:host=ep-sweet-dust-a2f7jkr0-pooler.eu-central-1.aws.neon.tech;port=5432;dbname=neondb;sslmode=require",
+            "neondb_owner",
+            "npg_smh8ZFwnO4Yr",
+            array(
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false
+            )
+        );
+        error_log('Database connection established successfully.');
+        return $conn;
+    } catch(PDOException $e) {
+        error_log('Database connection failed: ' . $e->getMessage());
         return [
             'success' => false,
-            'message' => 'Database connection failed: ' . $conn->connect_error
+            'message' => 'Database connection failed: ' . $e->getMessage()
         ];
     }
-    
-    return $conn;
 }
 
 // Response function
@@ -44,478 +50,280 @@ function isLoggedIn() {
 // User signup
 function signup() {
     if (!isset($_POST['email']) || !isset($_POST['password']) || !isset($_POST['confirm_password'])) {
-        return [
-            'success' => false,
-            'message' => 'All fields are required'
-        ];
+        return ['success' => false, 'message' => 'All fields are required'];
     }
     
     $email = validateInput($_POST['email']);
     $password = $_POST['password'];
     $confirmPassword = $_POST['confirm_password'];
     
-    // Validate email
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return [
-            'success' => false,
-            'message' => 'Invalid email format'
-        ];
+        return ['success' => false, 'message' => 'Invalid email format'];
     }
-    
-    // Check if passwords match
     if ($password !== $confirmPassword) {
-        return [
-            'success' => false,
-            'message' => 'Passwords do not match'
-        ];
+        return ['success' => false, 'message' => 'Passwords do not match'];
     }
-    
-    // Check password length
     if (strlen($password) < 6) {
-        return [
-            'success' => false,
-            'message' => 'Password must be at least 6 characters long'
-        ];
+        return ['success' => false, 'message' => 'Password must be at least 6 characters long'];
     }
     
     $conn = connectDB();
-    
     if (!is_object($conn)) {
-        return $conn; // Return error from connectDB
+        return $conn;
     }
     
-    // Check if email already exists
-    $stmt = $conn->prepare("SELECT email FROM User WHERE email = ?");
-    $stmt->bind_param("s", $email);
+    $sql = 'SELECT "email" FROM "User" WHERE "email" = ?';
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(1, $email);
     $stmt->execute();
-    $result = $stmt->get_result();
+    $result = $stmt->fetch();
     
-    if ($result->num_rows > 0) {
-        $stmt->close();
-        $conn->close();
-        return [
-            'success' => false,
-            'message' => 'Email already exists'
-        ];
+    if ($result) {
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => false, 'message' => 'Email already exists'];
     }
     
-    // Hash password
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-    
-    // Insert new user
-    $stmt = $conn->prepare("INSERT INTO User (email, password) VALUES (?, ?)");
-    $stmt->bind_param("ss", $email, $hashedPassword);
+    $sql = 'INSERT INTO "User" ("email", "password") VALUES (?, ?)';
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(1, $email);
+    $stmt->bindParam(2, $hashedPassword);
     
     if ($stmt->execute()) {
-        $stmt->close();
-        $conn->close();
-        return [
-            'success' => true,
-            'message' => 'Signup successful'
-        ];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => true, 'message' => 'Signup successful'];
     } else {
-        $stmt->close();
-        $conn->close();
-        return [
-            'success' => false,
-            'message' => 'Error creating account: ' . $conn->error
-        ];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => false, 'message' => 'Error creating account'];
     }
 }
 
 // User login
 function login() {
     if (!isset($_POST['email']) || !isset($_POST['password'])) {
-        return [
-            'success' => false,
-            'message' => 'Email and password are required'
-        ];
+        return ['success' => false, 'message' => 'Email and password are required'];
     }
     
     $email = validateInput($_POST['email']);
     $password = $_POST['password'];
     
     $conn = connectDB();
-    
     if (!is_object($conn)) {
-        return $conn; // Return error from connectDB
+        return $conn;
     }
     
-    // Get user from database
-    $stmt = $conn->prepare("SELECT email, password FROM User WHERE email = ?");
-    $stmt->bind_param("s", $email);
+    $sql = 'SELECT "email", "password" FROM "User" WHERE "email" = ?';
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(1, $email);
     $stmt->execute();
-    $result = $stmt->get_result();
+    $result = $stmt->fetch();
     
-    if ($result->num_rows === 1) {
-        $user = $result->fetch_assoc();
-        
-        // Verify password
-        if (password_verify($password, $user['password'])) {
-            // Set session
-            $_SESSION['user_email'] = $user['email'];
-            
-            $stmt->close();
-            $conn->close();
-            return [
-                'success' => true,
-                'message' => 'Login successful'
-            ];
-        }
+    if ($result && password_verify($password, $result['password'])) {
+        $_SESSION['user_email'] = $result['email'];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => true, 'message' => 'Login successful'];
     }
     
-    $stmt->close();
-    $conn->close();
-    return [
-        'success' => false,
-        'message' => 'Invalid email or password'
-    ];
+    $stmt->closeCursor();
+    $conn = null;
+    return ['success' => false, 'message' => 'Invalid email or password'];
 }
 
 // User logout
 function logout() {
-    // Destroy session
     session_unset();
     session_destroy();
-    
-    return [
-        'success' => true,
-        'message' => 'Logout successful'
-    ];
+    return ['success' => true, 'message' => 'Logout successful'];
 }
 
 // Check session
 function checkSession() {
     if (isLoggedIn()) {
-        return [
-            'success' => true,
-            'email' => $_SESSION['user_email']
-        ];
+        return ['success' => true, 'email' => $_SESSION['user_email']];
     } else {
-        return [
-            'success' => false,
-            'message' => 'Not logged in'
-        ];
+        return ['success' => false, 'message' => 'Not logged in'];
     }
 }
 
 // Add task
 function addTask() {
-    if (!isLoggedIn()) {
-        return [
-            'success' => false,
-            'message' => 'User not logged in'
-        ];
-    }
-    
-    if (!isset($_POST['task_name']) || !isset($_POST['task_date'])) {
-        return [
-            'success' => false,
-            'message' => 'Task name and date are required'
-        ];
-    }
+    if (!isLoggedIn()) return ['success' => false, 'message' => 'User not logged in'];
+    if (!isset($_POST['task_name']) || !isset($_POST['task_date'])) return ['success' => false, 'message' => 'Task name and date are required'];
     
     $taskName = validateInput($_POST['task_name']);
     $taskDate = validateInput($_POST['task_date']);
     $userEmail = $_SESSION['user_email'];
-    $status = 'Active'; // Default status
+    $status = 'Active';
     
-    // Validate task name
-    if (empty($taskName)) {
-        return [
-            'success' => false,
-            'message' => 'Task name cannot be empty'
-        ];
-    }
-    
-    // Validate date format
-    if (!preg_match("/^\d{4}-\d{2}-\d{2}$/", $taskDate)) {
-        return [
-            'success' => false,
-            'message' => 'Invalid date format'
-        ];
+    if (empty($taskName)) return ['success' => false, 'message' => 'Task name cannot be empty'];
+    if (!empty($taskDate)) {
+        // Try to parse the datetime
+        $date = DateTime::createFromFormat('Y-m-d\TH:i', $taskDate);
+        if (!$date) {
+            return ['success' => false, 'message' => 'Invalid date format. Please use YYYY-MM-DDTHH:MM'];
+        }
+        $taskDate = $date->format('Y-m-d');
     }
     
     $conn = connectDB();
+    if (!is_object($conn)) return $conn;
     
-    if (!is_object($conn)) {
-        return $conn; // Return error from connectDB
-    }
-    
-    // Insert task
-    $stmt = $conn->prepare("INSERT INTO Task (Name, Date, Status, user_email) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("ssss", $taskName, $taskDate, $status, $userEmail);
+    $stmt = $conn->prepare('INSERT INTO "Task" ("name", "date", "status", "user_email") VALUES (?, ?, ?, ?)');
+    $stmt->bindParam(1, $taskName);
+    $stmt->bindParam(2, $taskDate);
+    $stmt->bindParam(3, $status);
+    $stmt->bindParam(4, $userEmail);
     
     if ($stmt->execute()) {
-        $stmt->close();
-        $conn->close();
-        return [
-            'success' => true,
-            'message' => 'Task added successfully'
-        ];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => true, 'message' => 'Task added successfully'];
     } else {
-        $stmt->close();
-        $conn->close();
-        return [
-            'success' => false,
-            'message' => 'Error adding task: ' . $conn->error
-        ];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => false, 'message' => 'Error adding task'];
     }
 }
 
 // Get tasks
 function getTasks() {
-    if (!isLoggedIn()) {
-        return [
-            'success' => false,
-            'message' => 'User not logged in'
-        ];
-    }
+    if (!isLoggedIn()) return ['success' => false, 'message' => 'User not logged in'];
     
     $userEmail = $_SESSION['user_email'];
-    
     $conn = connectDB();
+    if (!is_object($conn)) return $conn;
     
-    if (!is_object($conn)) {
-        return $conn; // Return error from connectDB
-    }
-    
-    // Get tasks grouped by status
-    $stmt = $conn->prepare("SELECT id, Name, Date, Status FROM Task WHERE user_email = ? ORDER BY Date ASC");
-    $stmt->bind_param("s", $userEmail);
+    $stmt = $conn->prepare('SELECT "id", "name", "date", "status" FROM "Task" WHERE "user_email" = ? ORDER BY "date" ASC');
+    $stmt->bindParam(1, $userEmail);
     $stmt->execute();
-    $result = $stmt->get_result();
+    $result = $stmt->fetchAll();
     
-    $tasks = [
-        'Active' => [],
-        'Completed' => []
-    ];
-    
-    while ($task = $result->fetch_assoc()) {
-        $tasks[$task['Status']][] = $task;
+    $tasks = ['Active' => [], 'Completed' => []];
+    foreach ($result as $task) {
+        $tasks[$task['status']][] = $task;
     }
     
-    $stmt->close();
-    $conn->close();
-    
-    return [
-        'success' => true,
-        'tasks' => $tasks
-    ];
+    $stmt->closeCursor();
+    $conn = null;
+    return ['success' => true, 'tasks' => $tasks];
 }
 
 // Get single task
 function getTask() {
-    if (!isLoggedIn()) {
-        return [
-            'success' => false,
-            'message' => 'User not logged in'
-        ];
-    }
-    
-    if (!isset($_POST['task_id'])) {
-        return [
-            'success' => false,
-            'message' => 'Task ID is required'
-        ];
-    }
+    if (!isLoggedIn()) return ['success' => false, 'message' => 'User not logged in'];
+    if (!isset($_POST['task_id'])) return ['success' => false, 'message' => 'Task ID is required'];
     
     $taskId = (int)$_POST['task_id'];
     $userEmail = $_SESSION['user_email'];
     
     $conn = connectDB();
+    if (!is_object($conn)) return $conn;
     
-    if (!is_object($conn)) {
-        return $conn; // Return error from connectDB
-    }
-    
-    // Get task
-    $stmt = $conn->prepare("SELECT id, Name, Date, Status FROM Task WHERE id = ? AND user_email = ?");
-    $stmt->bind_param("is", $taskId, $userEmail);
+    $stmt = $conn->prepare('SELECT "id", "name", "date", "status" FROM "Task" WHERE "id" = ? AND "user_email" = ?');
+    $stmt->bindParam(1, $taskId);
+    $stmt->bindParam(2, $userEmail);
     $stmt->execute();
-    $result = $stmt->get_result();
+    $result = $stmt->fetch();
     
-    if ($result->num_rows === 1) {
-        $task = $result->fetch_assoc();
-        
-        $stmt->close();
-        $conn->close();
-        
-        return [
-            'success' => true,
-            'task' => $task
-        ];
+    if ($result) {
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => true, 'task' => $result];
     } else {
-        $stmt->close();
-        $conn->close();
-        
-        return [
-            'success' => false,
-            'message' => 'Task not found'
-        ];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => false, 'message' => 'Task not found'];
     }
 }
 
 // Update task
 function updateTask() {
-    if (!isLoggedIn()) {
-        return [
-            'success' => false,
-            'message' => 'User not logged in'
-        ];
-    }
+    if (!isLoggedIn()) return ['success' => false, 'message' => 'User not logged in'];
+    if (!isset($_POST['task_id']) || !isset($_POST['task_name'])) return ['success' => false, 'message' => 'Task ID and name are required'];
     
-    if (!isset($_POST['task_id']) || !isset($_POST['task_name']) || !isset($_POST['task_date']) || !isset($_POST['task_status'])) {
-        return [
-            'success' => false,
-            'message' => 'All fields are required'
-        ];
-    }
-    
-    $taskId = (int)$_POST['task_id'];
+    $taskId = validateInput($_POST['task_id']);
     $taskName = validateInput($_POST['task_name']);
-    $taskDate = validateInput($_POST['task_date']);
+    $taskDate = isset($_POST['task_date']) ? validateInput($_POST['task_date']) : '';
     $taskStatus = validateInput($_POST['task_status']);
     $userEmail = $_SESSION['user_email'];
     
-    // Validate task name
-    if (empty($taskName)) {
-        return [
-            'success' => false,
-            'message' => 'Task name cannot be empty'
-        ];
+    if (empty($taskName)) return ['success' => false, 'message' => 'Task name cannot be empty'];
+    if ($taskStatus === 'Active' && !empty($taskDate)) {
+        // Try to parse the datetime
+        $date = DateTime::createFromFormat('Y-m-d\TH:i', $taskDate);
+        if (!$date) {
+            return ['success' => false, 'message' => 'Invalid date format. Please use YYYY-MM-DDTHH:MM'];
+        }
+        $taskDate = $date->format('Y-m-d');
     }
-    
-    // Validate date format
-    if (!preg_match("/^\d{4}-\d{2}-\d{2}$/", $taskDate)) {
-        return [
-            'success' => false,
-            'message' => 'Invalid date format'
-        ];
-    }
-    
-    // Validate status
-    if ($taskStatus !== 'Active' && $taskStatus !== 'Completed') {
-        return [
-            'success' => false,
-            'message' => 'Invalid status'
-        ];
-    }
+    if (!in_array($taskStatus, ['Active', 'Completed'])) return ['success' => false, 'message' => 'Invalid status'];
     
     $conn = connectDB();
+    if (!is_object($conn)) return $conn;
     
-    if (!is_object($conn)) {
-        return $conn; // Return error from connectDB
-    }
-    
-    // Update task
-    $stmt = $conn->prepare("UPDATE Task SET Name = ?, Date = ?, Status = ? WHERE id = ? AND user_email = ?");
-    $stmt->bind_param("sssis", $taskName, $taskDate, $taskStatus, $taskId, $userEmail);
+    $stmt = $conn->prepare('UPDATE "Task" SET "name" = ?, "date" = ?, "status" = ? WHERE "id" = ? AND "user_email" = ?');
+    $stmt->bindParam(1, $taskName);
+    $stmt->bindParam(2, $taskDate);
+    $stmt->bindParam(3, $taskStatus);
+    $stmt->bindParam(4, $taskId);
+    $stmt->bindParam(5, $userEmail);
     
     if ($stmt->execute()) {
-        $stmt->close();
-        $conn->close();
-        
-        return [
-            'success' => true,
-            'message' => 'Task updated successfully'
-        ];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => true, 'message' => 'Task updated successfully'];
     } else {
-        $stmt->close();
-        $conn->close();
-        
-        return [
-            'success' => false,
-            'message' => 'Error updating task: ' . $conn->error
-        ];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => false, 'message' => 'Error updating task'];
     }
 }
 
 // Delete task
 function deleteTask() {
-    if (!isLoggedIn()) {
-        return [
-            'success' => false,
-            'message' => 'User not logged in'
-        ];
-    }
-    
-    if (!isset($_POST['task_id'])) {
-        return [
-            'success' => false,
-            'message' => 'Task ID is required'
-        ];
-    }
+    if (!isLoggedIn()) return ['success' => false, 'message' => 'User not logged in'];
+    if (!isset($_POST['task_id'])) return ['success' => false, 'message' => 'Task ID is required'];
     
     $taskId = (int)$_POST['task_id'];
     $userEmail = $_SESSION['user_email'];
     
     $conn = connectDB();
+    if (!is_object($conn)) return $conn;
     
-    if (!is_object($conn)) {
-        return $conn; // Return error from connectDB
-    }
-    
-    // Delete task
-    $stmt = $conn->prepare("DELETE FROM Task WHERE id = ? AND user_email = ?");
-    $stmt->bind_param("is", $taskId, $userEmail);
+    $stmt = $conn->prepare('DELETE FROM "Task" WHERE "id" = ? AND "user_email" = ?');
+    $stmt->bindParam(1, $taskId);
+    $stmt->bindParam(2, $userEmail);
     
     if ($stmt->execute()) {
-        $stmt->close();
-        $conn->close();
-        
-        return [
-            'success' => true,
-            'message' => 'Task deleted successfully'
-        ];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => true, 'message' => 'Task deleted successfully'];
     } else {
-        $stmt->close();
-        $conn->close();
-        
-        return [
-            'success' => false,
-            'message' => 'Error deleting task: ' . $conn->error
-        ];
+        $stmt->closeCursor();
+        $conn = null;
+        return ['success' => false, 'message' => 'Error deleting task'];
     }
 }
 
 // Main handler
-$action = isset($_POST['action']) ? $_POST['action'] : '';
+$action = $_POST['action'] ?? '';
 $response = [];
 
 switch ($action) {
-    case 'signup':
-        $response = signup();
-        break;
-    case 'login':
-        $response = login();
-        break;
-    case 'logout':
-        $response = logout();
-        break;
-    case 'check_session':
-        $response = checkSession();
-        break;
-    case 'add_task':
-        $response = addTask();
-        break;
-    case 'get_tasks':
-        $response = getTasks();
-        break;
-    case 'get_task':
-        $response = getTask();
-        break;
-    case 'update_task':
-        $response = updateTask();
-        break;
-    case 'delete_task':
-        $response = deleteTask();
-        break;
-    default:
-        $response = [
-            'success' => false,
-            'message' => 'Invalid action'
-        ];
+    case 'signup': $response = signup(); break;
+    case 'login': $response = login(); break;
+    case 'logout': $response = logout(); break;
+    case 'check_session': $response = checkSession(); break;
+    case 'add_task': $response = addTask(); break;
+    case 'get_tasks': $response = getTasks(); break;
+    case 'get_task': $response = getTask(); break;
+    case 'update_task': $response = updateTask(); break;
+    case 'delete_task': $response = deleteTask(); break;
+    default: $response = ['success' => false, 'message' => 'Invalid action'];
 }
 
 sendResponse($response);
