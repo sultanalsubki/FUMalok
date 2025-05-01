@@ -21,18 +21,23 @@
                 </div>
                 <div class="form-group">
                     <label for="task_date">Due Date</label>
-                    <input type="date" id="task_date" name="task_date" required>
+                    <input type="datetime-local" id="task_date" name="task_date" required>
                 </div>
                 <div class="form-group">
-                    <label for="task_status">Status</label>
-                    <select id="task_status" name="task_status" required>
-                        <option value="Active">Active</option>
-                        <option value="Completed">Completed</option>
-                    </select>
+                    <label>Status</label>
+                    <div class="status-wrapper">
+                        <div class="toggle-container">
+                            <input type="checkbox" id="task_status" name="task_status" value="Completed">
+                            <label for="task_status" class="toggle-label">
+                                <div class="toggle-button"></div>
+                            </label>
+                        </div>
+                        <span id="status_text" class="status-text">Active</span>
+                    </div>
                 </div>
                 <div class="form-actions">
                     <a href="dashboard.html" class="btn btn-secondary">Cancel</a>
-                    <button type="submit" class="btn btn-primary">Update Task</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -80,9 +85,17 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    document.getElementById('task_name').value = data.task.Name;
-                    document.getElementById('task_date').value = data.task.Date;
-                    document.getElementById('task_status').value = data.task.Status;
+                    document.getElementById('task_name').value = data.task.name;
+                    // Convert date to datetime-local format
+                    if (data.task.date) {
+                        const date = new Date(data.task.date);
+                        date.setHours(0, 0, 0, 0);
+                        document.getElementById('task_date').value = date.toISOString().slice(0, 16);
+                    }
+                    if (data.task.status === 'Completed') {
+                        document.getElementById('task_status').checked = true;
+                        document.getElementById('status_text').textContent = 'Completed';
+                    }
                 } else {
                     window.location.href = 'dashboard.html';
                 }
@@ -97,6 +110,7 @@
             e.preventDefault();
             
             const formData = new FormData(this);
+            formData.append('task_status', document.getElementById('task_status').checked ? 'Completed' : 'Active');
             
             fetch('server.php', {
                 method: 'POST',
@@ -113,6 +127,15 @@
             .catch(error => {
                 document.getElementById('error-message').textContent = 'An error occurred. Please try again.';
             });
+        });
+
+        // Update toggle text on change
+        document.getElementById('task_status').addEventListener('change', function() {
+            if (this.checked) {
+                document.getElementById('status_text').textContent = 'Completed';
+            } else {
+                document.getElementById('status_text').textContent = 'Active';
+            }
         });
     </script>
 </body>

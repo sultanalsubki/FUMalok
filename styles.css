@@ -228,6 +228,112 @@
     padding: 1rem;
   }
   
+  /* Date Picker Styles */
+  input[type="date"] {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    background: transparent;
+    bottom: 0;
+    color: transparent;
+    cursor: pointer;
+    height: auto;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: auto;
+  }
+  .date-picker-wrapper {
+    position: relative;
+    display: inline-block;
+  }
+  .date-picker-wrapper::after {
+    content: "📅";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  
+  /* Toggle Button Styles */
+  .status-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  
+  .toggle-container {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+  }
+  
+  .toggle-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 2px;
+    width: 56px;
+    height: 28px;
+    border-radius: 14px;
+    background-color: #f5f5f5;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+    border: 2px solid #e0e0e0;
+  }
+  
+  .toggle-button {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: white;
+    position: absolute;
+    left: 4px;
+    transition: all 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  
+  .status-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.3s ease;
+    user-select: none;
+  }
+  
+  #task_status:checked + .toggle-label {
+    background-color: #4CAF50;
+    border-color: #3d8b40;
+  }
+  
+  #task_status:checked + .toggle-label .toggle-button {
+    transform: translateX(28px);
+    background-color: white;
+  }
+  
+  #task_status:checked ~ .status-text {
+    color: #4CAF50;
+  }
+  
+  #task_status {
+    display: none;
+  }
+  
+  .toggle-label:hover {
+    border-color: #999;
+  }
+  
+  #task_status:checked + .toggle-label:hover {
+    border-color: #2d662f;
+  }
+  
   /* Responsive Styles */
   @media (min-width: 768px) {
     .tasks-container {
@@ -254,4 +360,3 @@
       justify-content: flex-end;
     }
   }
-  
